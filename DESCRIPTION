@@ -1,16 +1,24 @@
 Package: edyn
-Title: What the Package Does (One Line, Title Case)
+Title: Computes Utterance Emotion Dynamics Metrics
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Will",
+           family = "Hipson",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to
-    pick a license
+           email = "william.hipson@carleton.ca")
+Description: Functions for computing utterance emotion dynamics metrics like home bases, variability, displacement, and rise/recovery rates from time series data. 
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
+Imports: 
+    tidytext,
+    tibbletime,
+    dplyr,
+    tidyr,
+    stringr,
+    purrr,
+    rlang,
+    glue,
+    psych
