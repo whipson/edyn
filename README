@@ -1,0 +1,24 @@
+Emotion Dynamics in Movie Dialogues
+
+The files in this directory enable the user to compute Utterance Emotion Dynamics (UED) from a series of individual's or multiple individuals' text. Specifically, we include the following:
+
+data:
+  - imsdb.csv : processed imsdb scripts with no lemmatization (20% of the full dataset due to size constraints).
+  - imsdb-lem.csv : processed imsdb scripts with lemmatization (20% of the full dataset due to size constraints).
+R : functions for calculating UED, discordance.
+eacl-appendix-code : RMarkdown for reproducing analyses and visualizations in the paper.
+eacl-ued-code : RMarkdown for computing UED on user-supplied data.
+lexicons : NRC Emotion Lexicon and VAD lexicon
+appendix : PDF of the appendix
+ethics : PDF of the Ethics and Data Statement
+
+Steps for computing UED with user-supplied data:
+
+1. Download and install R (https://cran.r-project.org/)
+2. Install dependencies: dplyr, purrr, readr, stringr, tidytext, tibbletime.
+3. Open file eacl-ued-code.Rmd
+4. Replace line 38 with a .csv file. Each row must be an utterance (e.g., tweet, dialogue, etc.).
+5. If applicable, supply an id (e.g., participant id, speaker id, etc.) and a time variable.
+6. Choose summarise = TRUE if you only want summarised output for each id. Otherwise, each row in output will be VA word uttered.
+
+The IMSDb movie dialogue data set is free to use for educational purposes.
