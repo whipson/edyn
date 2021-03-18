@@ -1,0 +1,446 @@
+---
+title: "emotion-dynamics-movie-dialogue-code"
+author: "Anonymous EACL Submission"
+date: "02/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse) # for data manipulation and visualization
+library(tibbletime) # for rolling averages
+library(tidytext) # for tokenization
+library(ggpubr) # for combining figures
+library(ggrepel) # for text label repelling
+library(RColorBrewer) # color palettes
+library(lme4) # for linear mixed modeling
+library(mgcv) # for GAMs
+
+# Set theme
+theme_set(theme_bw(base_size = 14))
+
+source("R/compute_dynamics.R")
+source("R/spline-dist.R")
+source("R/utils.R") # utility functions
+
+v <- read_tsv("lexicons/v.scores", col_names = FALSE) %>%
+  setNames(c("word", "score"))
+a <- read_tsv("lexicons/a.scores", col_names = FALSE) %>%
+  setNames(c("word", "score"))
+
+va <- inner_join(v, a, by = "word") %>%
+  setNames(c("word", "valence", "arousal"))
+
+emolex <- read_tsv("lexicons/emolex.txt", col_names = FALSE) %>% # NRC Emotion Lexicon
+  setNames(c("word", "emotion", "value"))
+
+# Converting NRC Emotion Lexicon to wide format
+emolex_wide <- emolex %>%
+  pivot_wider(names_from = emotion, values_from = value)
+
+stoplist <- read_tsv("lexicons/CornellStoplist.txt", col_names = FALSE) %>% # Cornell Stoplist
+  setNames("word")
+
+# Load lemmatized data
+imsdb <- read_csv("data/imsdb-lem.csv")
+
+# Here we filter out speakers who have fewer than 50 utterances/lines.
+imsdb_50 <- imsdb %>%
+  group_by(title, speaker) %>%
+  add_count() %>%
+  filter(n >= 50) %>% # filtering step
+  ungroup() %>%
+  unnest_tokens(word, text_lm) # tokenization
+
+# Create dataframes with rolling averages.
+# Define rolling average functions using 'rollify' from tibbletime
+rolling_mean <- rollify(mean, window = 30) # this is for emotion lexicon
+rolling_mean2 <- rollify(mean, window = 10) # this is for VAD (more words means smaller window)
+
+# NRC Emotion Lexicon
+imsdb_dens <- imsdb_50 %>%
+  inner_join(emolex_wide) %>%
+  select(-text, -writers, -n) %>%
+  group_by(title, speaker) %>%
+  filter(n() >= 200, # we limit to characters who say at least 200 words. 
+         !is.na(anger)) %>%
+  arrange(title, speaker, turn) %>%
+  mutate(across(anger:trust, rolling_mean, .names = "{col}_dens"),
+         turn_id = seq.int(n()), # an integer for ordered dialog of a character
+         turn_index = turn_id/max(turn_id)) %>% # a value from 0 - 1 representing the normalized narrative time for the character's dialog
+  ungroup() %>%
+  group_by(title) %>%
+  mutate(title_id = cur_group_id()) %>% # add id variables.
+  group_by(title_id, speaker) %>%
+  mutate(speaker_id = cur_group_id()) %>%
+  ungroup()
+
+# NRC VAD
+# We eliminate stop words for the VAD because it includes a large number of these.
+imsdb_vad_raw_stop <- imsdb_50 %>% 
+  inner_join(va, by = "word") %>%
+  anti_join(stoplist, by = "word")
+
+imsdb_vad_stop <- imsdb_vad_raw_stop %>%
+  group_by(title, speaker) %>%
+  filter(n() >= 200) %>% # we limit to characters who say at least 200 words. 
+  arrange(title, speaker, turn) %>%
+  mutate(across(c(valence, arousal), rolling_mean2, .names = "{col}_roll")) %>%
+  ungroup() %>%
+  group_by(title) %>%
+  mutate(title_id = cur_group_id()) %>% # add id variables.
+  group_by(title_id, speaker) %>%
+  mutate(speaker_id = cur_group_id()) %>%
+  ungroup()
+
+# Compute UED
+ued_data <- imsdb_vad_stop %>%
+  filter(!is.na(valence_roll), !is.na(arousal_roll))
+
+ued <- compute_dynamics(ued_data, valence_roll, arousal_roll, id = speaker_id)
+```
+
+## Emotion Word Density over Narrative Time: Positive and Negative
+
+```{r}
+imsdb_dens %>%
+  select(title, turn_index, speaker, positive_dens, negative_dens) %>%
+  pivot_longer(cols = c(positive_dens, negative_dens)) %>%
+  ggplot(aes(x = turn_index, y = value, color = name)) +
+  geom_smooth(alpha = .9, se = FALSE, size = 2) +
+  geom_vline(xintercept = 0.91, size = 1, linetype = "dotted") +
+  annotate(geom = "text", x = 0.91, y = .216, label = "91%", size = 6, color = "gray32") +
+  labs(x = "Narrative Time",
+       y = "% Word Usage",
+       color = NULL) +
+  scale_x_continuous(breaks = c(0.00, 0.20, 0.40, 0.60, 0.80, 1.00), labels = scales::percent_format()) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_color_manual(values = c("red3", "springgreen3"), 
+                     labels = c("Negative", "Positive"), guide = guide_legend(reverse = TRUE)) +
+  coord_cartesian(ylim = c(0.15, 0.21), clip = 'off') +
+  theme(panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color = "black"),
+        axis.line.y = element_line(color = "black"),
+        axis.title = element_text(size = 20),
+        axis.text = element_text(size = 17),
+        legend.text = element_text(size = 20),
+        plot.margin = unit(c(2, 1, 1, 1), "lines"))
+```
+
+## Emotion Word Density over Narrative Time: Basic Emotions
+
+```{r}
+imsdb_dens %>%
+  filter(!is.na(anger_dens)) %>%
+  select(title, turn_index, speaker, anger_dens:joy_dens, sadness_dens:trust_dens) %>%
+  pivot_longer(cols = anger_dens:trust_dens) %>%
+  ggplot(aes(x = turn_index, y = value, color = name)) +
+  geom_smooth(alpha = .9, se = FALSE, size = 2) +
+  labs(x = "Narrative Time",
+       y = "% Word Usage",
+       color = NULL) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_color_manual(values = c("#FF0000", "#EE9A00", "#00CD00", "#9F79EE",
+                                "#00C5CD", "red3", "springgreen3", "#4876FF", "#8B3E2F", "#CD6889"),
+                     labels = c("Anger", "Anticipation", "Disgust", "Fear", "Joy",
+                                "Sadness", "Surprise", "Trust")) +
+  theme(panel.grid.minor = element_blank(),
+        axis.line.x = element_line(color = "black"),
+        axis.line.y = element_line(color = "black"),
+        axis.title = element_text(size = 20),
+        axis.text = element_text(size = 17),
+        legend.text = element_text(size = 20))
+```
+
+## One Dimensional and Two Dimensional Home Bases: Jack and Wendy
+
+```{r}
+# Uni-dimensional and two-dimensional plots for Jack and Wendy from The Shining
+
+# Create boundaries for the 95% density of valence and arousal across ALL characters in the IMSDb
+v_bound <- quantile(ued$valence_roll, c(0.025, 0.975), na.rm = TRUE)
+a_bound <- quantile(ued$arousal_roll, c(0.025, 0.975), na.rm = TRUE)
+
+# Uni-dimensional state space for Jack. This is a line plot with time on the x-axis and valence/arousal on the y-axis.
+
+ued <- ued %>%
+  group_by(title_id, speaker_id) %>%
+  mutate(turn_index = seq.int(n())) %>%
+  ungroup()
+
+jack_tl <- ued %>%
+  filter(speaker_id == 2140) %>% # Jack's id
+  mutate(turn_index = turn_index/max(turn_index)) %>%
+  pivot_longer(cols = c(valence_roll, arousal_roll)) %>%
+  group_by(name) %>%
+  mutate(lwr = quantile(value, 0.16, na.rm = TRUE),
+         upr = quantile(value, 0.84, na.rm = TRUE)) %>%
+  ggplot(aes(x = turn_index, y = value, color = turn_index)) +
+  geom_line(size = 1) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), color = NA, fill = "cadetblue4", alpha = .20) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "JACK") +
+  guides(color = FALSE) +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(breaks = c(0.4, 0.8)) +
+  scale_color_gradient2(low = "black", high = "red2", mid = "dodgerblue2", midpoint = 0.5, labels = scales::percent_format(), breaks = c(0, 0.50)) +
+  facet_wrap(~name, nrow = 2, labeller = labeller(name = function(x) str_remove(str_to_title(x), "_.*"))) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.subtitle = element_text(hjust = .5),
+        axis.text.x = element_text(size = 8),
+        axis.title.x = element_text(size = 8),
+        strip.text = element_text(size = 10))
+
+# Similarly for Wendy, we produce a uni-dimensional line plot.
+wendy_tl <- ued %>%
+  filter(speaker_id == 2141) %>% # Wendy's id
+  mutate(turn_index = turn_index/max(turn_index)) %>%
+  pivot_longer(cols = c(valence_roll, arousal_roll)) %>%
+  group_by(name) %>%
+  mutate(lwr = quantile(value, 0.16, na.rm = TRUE),
+         upr = quantile(value, 0.84, na.rm = TRUE)) %>%
+  ggplot(aes(x = turn_index, y = value, color = turn_index)) +
+  geom_line(size = 1) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), color = NA, fill = "cadetblue4", alpha = .20) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "WENDY") +
+  guides(color = FALSE) +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(breaks = c(0.4, 0.8)) +
+  scale_color_gradient2(low = "black", high = "red2", mid = "dodgerblue2", midpoint = 0.5, labels = scales::percent_format(), breaks = c(0, 0.50)) +
+  facet_wrap(~name, nrow = 2, labeller = labeller(name = function(x) str_remove(str_to_title(x), "_.*"))) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.subtitle = element_text(hjust = .5),
+        axis.text.x = element_text(size = 8),
+        axis.title.x = element_text(size = 8),
+        strip.text = element_text(size = 10))
+
+# Now we produce state space figure for Jack. Valence is on the x-axis and arousal is on the y-axis. 
+# Time is displayed using color. We generate ellipses representing their home base.
+jack_ss <- ggplot() +
+  geom_hline(yintercept = .5, color = "grey") +
+  geom_vline(xintercept = .5, color = "grey") +
+  geom_segment(aes(x = mean(v_bound), y = a_bound[1], xend = mean(v_bound), yend = a_bound[2]), color = "black", size = 1, linetype = "dotted") +
+  geom_segment(aes(x = v_bound[1], y = mean(a_bound), xend = v_bound[2], yend = mean(a_bound)), color = "black", size = 1, linetype = "dotted") +
+  # annotate("text", x = c(.35, .65, .35, .65), y = c(.35, .35, .65, .65), label = c("Low Arousal\nNegative", 
+  #                                                                                  "Low Arousal\nPositive", 
+  #                                                                                  "High Arousal\nNegative", 
+  #                                                                                  "High Arousal\nPositive"),
+  #          size = 4, alpha = .50) +
+  stat_ellipse(data = ued %>%
+                 filter(speaker_id == 2140) %>%
+                 mutate(turn_index = turn_index/max(turn_index)), aes(x = valence_roll, y = arousal_roll),
+               geom = "polygon", fill = "cadetblue4", level = .68, alpha = .60) +
+  geom_path(data = ued %>%
+              filter(speaker_id == 2140) %>%
+              mutate(turn_index = turn_index/max(turn_index)), 
+            aes(x = valence_roll, y = arousal_roll, color = turn_index), alpha = .65) +
+  labs(x = "Valence",
+       y = "Arousal",
+       color = "Narrative Time") +
+  scale_color_gradient2(low = "black", high = "red2", mid = "dodgerblue2", midpoint = 0.5, labels = scales::percent_format(), breaks = c(0, 0.5)) +
+  coord_equal() +
+  scale_x_continuous(limits = c(0.30, 0.85)) +
+  scale_y_continuous(limits = c(0.275, 0.725)) +
+  theme(panel.grid = element_blank(),
+        plot.subtitle = element_text(hjust = .5))
+
+# Same plot as above but for Wendy.
+wendy_ss <- ggplot() +
+  geom_hline(yintercept = .5, color = "grey") +
+  geom_vline(xintercept = .5, color = "grey") +
+  geom_segment(aes(x = mean(v_bound), y = a_bound[1], xend = mean(v_bound), yend = a_bound[2]), color = "black", size = 1, linetype = "dotted") +
+  geom_segment(aes(x = v_bound[1], y = mean(a_bound), xend = v_bound[2], yend = mean(a_bound)), color = "black", size = 1, linetype = "dotted") +
+  # annotate("text", x = c(.35, .65, .35, .65), y = c(.35, .35, .65, .65), label = c("Low Arousal\nNegative", 
+  #                                                                                  "Low Arousal\nPositive", 
+  #                                                                                  "High Arousal\nNegative", 
+  #                                                                                  "High Arousal\nPositive"),
+  #          size = 4, alpha = .50) +
+  stat_ellipse(data = ued %>%
+                 filter(speaker_id == 2141) %>%
+                 mutate(turn_index = turn_index/max(turn_index)), aes(x = valence_roll, y = arousal_roll),
+               geom = "polygon", fill = "cadetblue4", level = .68, alpha = .60) +
+  geom_path(data = ued %>%
+              filter(speaker_id == 2141) %>%
+              mutate(turn_index = turn_index/max(turn_index)), 
+            aes(x = valence_roll, y = arousal_roll, color = turn_index), alpha = .65) +
+  labs(x = "Valence",
+       y = "Arousal",
+       color = "Narrative Time") +
+  scale_color_gradient2(low = "black", high = "red2", mid = "dodgerblue2", midpoint = 0.5, labels = scales::percent_format(), breaks = c(0, 0.5)) +
+  coord_equal() +
+  scale_x_continuous(limits = c(0.30, 0.85)) +
+  scale_y_continuous(limits = c(0.275, 0.725)) +
+  theme(panel.grid = element_blank(),
+        plot.subtitle = element_text(hjust = .5))
+
+# Bring everything together into 2 x 2 panel.
+g <- ggarrange(jack_tl, wendy_tl, jack_ss, wendy_ss, ncol = 2, nrow = 2, heights = c(.50, .50),
+               legend = 'top', common.legend = TRUE, labels = c("A", "", "B", ""))
+g
+```
+
+## Discordance
+
+```{r}
+# First we create splines for each character's time series so that they are directly comparable.
+spline_data <- ued %>%
+  mutate(in_state = ifelse(is.na(disp_num), TRUE, FALSE)) %>%
+  group_by(title_id, speaker_id, n) %>%
+  mutate(word_seq_id = seq.int(n())) %>%
+  spliner(word_seq_id, c(valence_roll, arousal_roll, in_state), n = 500) %>% # spliner is custom function
+  ungroup() %>%
+  mutate(in_state = ifelse(in_state < 0.05, 0, 1),
+         event_number = cumsum(ifelse(in_state == 0 & lag(in_state, default = 1) == 1, 1, 0)),
+         event_number = ifelse(in_state == 1, NA, in_state)) %>%
+  group_by(in_state) %>%
+  mutate(event_length = n(),
+         event_length = ifelse(is.na(in_state), NA, event_length)) %>%
+  ungroup() %>%
+  mutate(in_state = ifelse(event_length < 10 | is.na(event_length), 1, in_state))
+
+# We create another version of the above dataset but limited to characters in the same movie who appear
+# at regular intervals
+spline_data_start_end <- ued %>%
+  mutate(in_state = ifelse(is.na(disp_num), TRUE, FALSE)) %>%
+  group_by(title_id) %>%
+  mutate(n_time_pct = round(n_time_real/max(n_time_real) * 100, -1)) %>%
+  group_by(speaker_id) %>%
+  filter(any(n_time_pct %in% c(0, 10, 20)) & any(n_time_pct %in% c(80, 90, 100))) %>%
+  group_by(title_id, speaker_id, n) %>%
+  mutate(word_seq_id = seq.int(n())) %>%
+  spliner(word_seq_id, c(valence_roll, arousal_roll, in_state), n = 500) %>% # spliner is custom function
+  ungroup() %>%
+  mutate(in_state = ifelse(in_state < 0.05, 0, 1),
+         event_number = cumsum(ifelse(in_state == 0 & lag(in_state, default = 1) == 1, 1, 0)),
+         event_number = ifelse(in_state == 1, NA, in_state)) %>%
+  group_by(in_state) %>%
+  mutate(event_length = n(),
+         event_length = ifelse(is.na(in_state), NA, event_length)) %>%
+  ungroup() %>%
+  mutate(in_state = ifelse(event_length < 10 | is.na(event_length), 1, in_state))
+
+# Creating a dataframe to join with the one below.
+n_char_dat <- spline_data %>%
+  select(title_id, speaker_id, n) %>%
+  distinct()
+
+# and for the other
+n_char_dat_se <- spline_data_start_end %>%
+  select(title_id, speaker_id, n) %>%
+  distinct()
+
+# Now we compute average (Euclidean) distances among the characters (in the same movie)
+distance_data <- spline_data %>%
+  group_by(title_id) %>%
+  filter(n_distinct(speaker_id) >= 2) %>% # only movies with two or more characters are included.
+  group_modify(~ pivot_longer(.x, cols = c(valence_roll, arousal_roll, in_state), names_to = "dimension", values_to = "score") %>%
+                 pivot_wider(id_cols = c(dimension, speaker_id, word_seq_id), names_from = speaker_id,
+                             values_from = score, names_prefix = "char") %>%
+                 rowwise(word_seq_id, dimension) %>%
+                 mutate(dist = average_distance(c_across(starts_with("char")))) %>% # custom function
+                 pivot_wider(id_cols = word_seq_id, names_from = dimension, values_from = dist) %>%
+                 rowwise(word_seq_id) %>%
+                 mutate(dist = sqrt(sum(valence_roll, arousal_roll))))
+
+distance_data <- distance_data %>%
+  left_join(n_char_dat, by = "title_id")
+
+# same with the other version
+distance_data_start_end <- spline_data_start_end %>%
+  group_by(title_id) %>%
+  filter(n_distinct(speaker_id) >= 2) %>% # only movies with two or more characters are included.
+  group_modify(~ pivot_longer(.x, cols = c(valence_roll, arousal_roll, in_state), names_to = "dimension", values_to = "score") %>%
+                 pivot_wider(id_cols = c(dimension, speaker_id, word_seq_id), names_from = speaker_id,
+                             values_from = score, names_prefix = "char") %>%
+                 rowwise(word_seq_id, dimension) %>%
+                 mutate(dist = average_distance(c_across(starts_with("char")))) %>% # custom function
+                 pivot_wider(id_cols = word_seq_id, names_from = dimension, values_from = dist) %>%
+                 rowwise(word_seq_id) %>%
+                 mutate(dist = sqrt(sum(valence_roll, arousal_roll))))
+
+distance_data_start_end <- distance_data_start_end %>%
+  left_join(n_char_dat_se, by = "title_id")
+
+# Discordance plots
+col_strip <- brewer.pal(11, "RdYlBu")
+
+# Setting new theme
+theme_strip <- theme_minimal(base_size = 28) +
+  theme(axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.text.x = element_text(vjust = 3),
+        panel.grid.minor = element_blank(),
+        legend.position = "top",
+        legend.key.width = unit(2, "cm"),
+        legend.title = element_text(vjust = 1),
+        legend.justification = c(0.4, 0.5)
+  )
+
+distance_data_start_end %>%
+  mutate(word_seq_id = word_seq_id/500) %>%
+  group_by(word_seq_id) %>%
+  summarise(mean_dist = mean(dist)) %>%
+  ggplot(aes(x = word_seq_id, y = 1, fill = mean_dist)) +
+  geom_tile() +
+  annotate(geom = "point", x = 0.8975, y = 1.58, size = 6, shape = 25, fill = "black", alpha = 0.65) +
+  annotate(geom = "text", x = 0.9075, y = 1.68, size = 7, label = "90%", alpha = 0.85) +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_gradientn(colors = rev(col_strip), # function below scales between 0 and 1
+                       labels = function(x) round(x, 3)) +
+  coord_cartesian(ylim = c(0.5, 1.5), clip = 'off') +
+  labs(x = "Narrative Time",
+       fill = "Discordance") +
+  theme_strip
+```
+
+## Analysis
+
+### Correlation between Density and Discordance over Time
+
+```{r}
+pred_dat <- data.frame(turn_index = seq(0, 1, length.out = 500))
+
+gam_pos <- gam(positive_dens ~ s(turn_index), data = imsdb_dens)
+summary(gam_pos)
+fitted_pos <- predict.gam(gam_pos, pred_dat)
+
+gam_neg <- gam(negative_dens ~ s(turn_index), data = imsdb_dens)
+summary(gam_neg)
+fitted_neg <- predict.gam(gam_neg, pred_dat)
+
+lm_dat <- distance_data_start_end %>%
+  group_by(title_id, word_seq_id) %>%
+  summarise(dist = mean(dist))
+
+lmer_fit <- lmer(dist ~ word_seq_id + (1 | title_id), data = lm_dat)
+summary(lmer_fit)
+
+## Correlation with GAM fit ##
+
+library(corrr)
+
+lm_dat %>%
+  mutate(word_seq_id = word_seq_id/500) %>%
+  group_by(word_seq_id) %>%
+  summarise(dist = mean(dist)) %>%
+  bind_cols(neg = fitted_neg) %>%
+  bind_cols(pos = fitted_pos) %>%
+  corrr::correlate()
+```
