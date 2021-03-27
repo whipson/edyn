@@ -19,18 +19,19 @@
 #' @param va_limits A tuple of scores of the VA lexicon to trim. Will exclude scores between the two values (inclusive).
 #' This is useful for eliminating "neutral" VA terms.
 #'
-#' @import
+#' @import tibbletime
+#' @import tidytext
+#' @import rlang
+#' @import purrr
+#' @import dplyr
+#' @import stringr
+#' @import tidyr
 #' @return data.frame or tibble
 #' @export
-#'
-#' @examples
 ued <- function(data, text, lexicon = "vad", id = NULL, time = NULL, stop_words = NULL, roll_avg = 10, level = .68,
                 disp_length_min = 3, summarise = FALSE, trim_middle = NULL) {
 
   #TODO: Error for setting roll_avg too high.
-
-  require(tidytext)
-  require(tibbletime)
 
   if(!is.numeric(roll_avg) | roll_avg < 0) {
     stop("Argument 'roll_avg' must be a positive integer, or 0 for no averaging.")
