@@ -18,10 +18,10 @@
 #' the mean for the particular metric. If FALSE, output will contain a row for each word.
 #' @param min_count should words below this count be removed?
 #'
-#' @import tibbletime
+#' @importFrom tibbletime rollify
 #' @import tidytext
 #' @import rlang
-#' @import purrr
+#' @importFrom purrr map_lgl
 #' @import dplyr
 #' @import stringr
 #' @import tidyr

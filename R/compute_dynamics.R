@@ -14,9 +14,9 @@
 #'
 #' @import rlang
 #' @import dplyr
-#' @import glue
+#' @importFrom glue glue
 #' @importFrom psych rmssd
-#' @import stats
+#' @importFrom stats sd
 #' @return tibble
 #' @export
 #'

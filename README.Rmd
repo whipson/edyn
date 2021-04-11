@@ -18,8 +18,6 @@ knitr::opts_chunk$set(
 
 # edyn
 
-Emotion Dynamics in Movie Dialogues
-
 Compute Utterance Emotion Dynamics (UED) from a series of individual's or multiple individuals' text.
 
 [Hipson, W., & Mohammad, S. (2021). Emotion Dynamics in Movie Dialogues. arXiv preprint arXiv:2103.01345.](https://arxiv.org/abs/2103.01345)

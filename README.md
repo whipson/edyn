@@ -3,8 +3,6 @@
 
 # edyn
 
-Emotion Dynamics in Movie Dialogues
-
 Compute Utterance Emotion Dynamics (UED) from a series of individual’s
 or multiple individuals’ text.
 
@@ -24,40 +22,6 @@ Load library and use sample data of IMSDb (script database).
 
 ``` r
 library(edyn)
-#> Warning: replacing previous import 'dplyr::collapse' by 'glue::collapse' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'purrr::list_along' by 'rlang::list_along'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::invoke' by 'rlang::invoke' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'purrr::flatten_raw' by 'rlang::flatten_raw'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::modify' by 'rlang::modify' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'purrr::as_function' by 'rlang::as_function'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::flatten_dbl' by 'rlang::flatten_dbl'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::flatten_lgl' by 'rlang::flatten_lgl'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::flatten_int' by 'rlang::flatten_int'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::%@%' by 'rlang::%@%' when loading
-#> 'edyn'
-#> Warning: replacing previous import 'purrr::flatten_chr' by 'rlang::flatten_chr'
-#> when loading 'edyn'
-#> Warning: replacing previous import 'purrr::splice' by 'rlang::splice' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'purrr::flatten' by 'rlang::flatten' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'purrr::prepend' by 'rlang::prepend' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'dplyr::filter' by 'stats::filter' when
-#> loading 'edyn'
-#> Warning: replacing previous import 'dplyr::lag' by 'stats::lag' when loading
-#> 'edyn'
-#> Warning: replacing previous import 'stats::filter' by 'tibbletime::filter' when
-#> loading 'edyn'
 
 data("imsdb")
 head(imsdb)
