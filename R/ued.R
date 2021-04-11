@@ -16,21 +16,17 @@
 #' @param disp_length_min Minimum number of words for displacements.
 #' @param summarise If TRUE, output will be summarised such that each row corresponds to an id with each column representing
 #' the mean for the particular metric. If FALSE, output will contain a row for each word.
-#' @param va_limits A tuple of scores of the VA lexicon to trim. Will exclude scores between the two values (inclusive).
-#' This is useful for eliminating "neutral" VA terms.
 #' @param min_count should words below this count be removed?
 #'
-#' @import tidytext
 #' @import tibbletime
-#' @import dplyr
-#' @import purrr
-#' @import readr
-#' @import tidyr
+#' @import tidytext
 #' @import rlang
+#' @import purrr
+#' @import dplyr
+#' @import stringr
+#' @import tidyr
 #' @return data.frame or tibble
 #' @export
-#'
-#' @examples
 ued <- function(data, text, lexicon = "vad", id = NULL, time = NULL, stop_words = NULL, roll_avg = 10, level = .68,
                 disp_length_min = 3, summarise = FALSE, min_count = 200) {
 

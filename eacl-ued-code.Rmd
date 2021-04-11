@@ -1,0 +1,57 @@
+---
+title: "Compute UED"
+author: "Anonymous EACL Submission"
+date: "02/10/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#install.packages(c("dplyr", "purrr", "readr", "stringr", "tidytext"))
+library(dplyr)
+library(purrr)
+library(readr)
+library(stringr)
+library(tidytext)
+library(tibbletime)
+
+# Load UED functions
+# Make sure these files are in the working directory!
+source("R/ued.R")
+source("R/compute_dynamics.R")
+source("R/utils.R")
+
+# Load lexicon
+v <- read_tsv("lexicons/v.scores", col_names = FALSE) %>%
+  setNames(c("word", "score"))
+a <- read_tsv("lexicons/a.scores", col_names = FALSE) %>%
+  setNames(c("word", "score"))
+va <- inner_join(v, a, by = "word") %>%
+  setNames(c("word", "valence", "arousal"))
+
+# Load stoplist
+stoplist <- read_tsv("lexicons/CornellStoplist.txt", col_names = FALSE) %>% # Cornell Stoplist
+  setNames("word")
+
+# Load sample data
+imsdb <- read_csv("data/imsdb-lem.csv")
+imsdb
+```
+
+```{r}
+# Compute UED (long form)
+# here, each row is a VA word
+imsdb_ued <- ued(imsdb, text_lm, id = speaker_id, lexicon = va, stop_words = stoplist)
+
+# Compute UED (summarised)
+# here, each row is a character
+
+imsdb_ued_sum <- ued(imsdb, text_lm, id = speaker_id, lexicon = va, stop_words = stoplist, summarise = TRUE)
+imsdb_ued_sum
+```
+

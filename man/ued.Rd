@@ -15,7 +15,11 @@ ued(
   level = 0.68,
   disp_length_min = 3,
   summarise = FALSE,
+<<<<<<< HEAD
   min_count = 0
+=======
+  trim_middle = NULL
+>>>>>>> 8c29ba597e8eee7b64308d9531f29500711f94d2
 )
 }
 \arguments{
@@ -42,8 +46,11 @@ If entering a data frame, function will use the first character column it sees.}
 \item{summarise}{If TRUE, output will be summarised such that each row corresponds to an id with each column representing
 the mean for the particular metric. If FALSE, output will contain a row for each word.}
 
+<<<<<<< HEAD
 \item{min_count}{should words below this count be removed?}
 
+=======
+>>>>>>> 8c29ba597e8eee7b64308d9531f29500711f94d2
 \item{va_limits}{A tuple of scores of the VA lexicon to trim. Will exclude scores between the two values (inclusive).
 This is useful for eliminating "neutral" VA terms.}
 }
