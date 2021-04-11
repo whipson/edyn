@@ -1,0 +1,50 @@
+---
+output: github_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# edyn
+
+Emotion Dynamics in Movie Dialogues
+
+Compute Utterance Emotion Dynamics (UED) from a series of individual's or multiple individuals' text.
+
+[Hipson, W., & Mohammad, S. (2021). Emotion Dynamics in Movie Dialogues. arXiv preprint arXiv:2103.01345.](https://arxiv.org/abs/2103.01345)
+
+## Installation
+
+``` r
+# install.packages("devtools")
+devtools::install_github("whipson/edyn")
+```
+
+## Usage
+
+Load library and use sample data of IMSDb (script database).
+
+```{r}
+library(edyn)
+
+data("imsdb")
+head(imsdb)
+```
+
+Compute UED
+
+```{r}
+ued <- ued(imsdb, id = speaker, time = turn, text = text, roll_avg = 10, min_count = 200, summarise = TRUE)
+head(ued[, c("speaker", "avg_emo_var", "rise_rate", "disp_count")])
+```

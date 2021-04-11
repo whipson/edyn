@@ -12,6 +12,11 @@
 #' @param disp_length_min Minimal number of time points that a displacement can have. Must be between 1 and length of data,
 #' but we recommend at least 3.
 #'
+#' @import rlang
+#' @import dplyr
+#' @import glue
+#' @importFrom psych rmssd
+#' @import stats
 #' @return tibble
 #' @export
 #'
@@ -21,9 +26,9 @@ compute_dynamics <- function(data, x, y, id = NULL, time = NULL, level = .68,
 
   ## -- PREPARATION -- ##
 
-  enq_x <- enquo(x)
-  enq_y <- enquo(y)
-  enq_time <- enquo(time)
+  enq_x <- rlang::enquo(x)
+  enq_y <- rlang::enquo(y)
+  enq_time <- rlang::enquo(time)
 
   if(!is.data.frame(data)) {
     stop("'data' must be in the form of a data frame or tibble")

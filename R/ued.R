@@ -18,19 +18,21 @@
 #' the mean for the particular metric. If FALSE, output will contain a row for each word.
 #' @param va_limits A tuple of scores of the VA lexicon to trim. Will exclude scores between the two values (inclusive).
 #' This is useful for eliminating "neutral" VA terms.
+#' @param min_count should words below this count be removed?
 #'
-#' @import
+#' @import tidytext
+#' @import tibbletime
+#' @import dplyr
+#' @import purrr
+#' @import readr
+#' @import tidyr
+#' @import rlang
 #' @return data.frame or tibble
 #' @export
 #'
 #' @examples
 ued <- function(data, text, lexicon = "vad", id = NULL, time = NULL, stop_words = NULL, roll_avg = 10, level = .68,
-                disp_length_min = 3, summarise = FALSE, trim_middle = NULL) {
-
-  #TODO: Error for setting roll_avg too high.
-
-  require(tidytext)
-  require(tibbletime)
+                disp_length_min = 3, summarise = FALSE, min_count = 200) {
 
   if(!is.numeric(roll_avg) | roll_avg < 0) {
     stop("Argument 'roll_avg' must be a positive integer, or 0 for no averaging.")
@@ -40,7 +42,7 @@ ued <- function(data, text, lexicon = "vad", id = NULL, time = NULL, stop_words 
     stop("Argument 'level' must be between 0 and 1.")
   }
 
-  enq_time <- enquo(time)
+  enq_time <- rlang::enquo(time)
   is_time_null <- is.null(rlang::eval_tidy(enq_time, data))
 
   tokenized <- tidytext::unnest_tokens(data, word, {{text}})
@@ -69,27 +71,13 @@ ued <- function(data, text, lexicon = "vad", id = NULL, time = NULL, stop_words 
   }
 
   if(lexicon == "vad") {
-    lex <- readr::read_tsv("lexica/NRC-VAD-Lexicon.txt") %>%
+    lex <- vad_lexicon %>%
       rename_all(function(x) stringr::str_to_lower(x)) %>%
-      select(-dominance) %>%
-      rename_if(is.character, "word")
-    if(!is.null(trim_middle)) {
-      if(trim_middle[1] >= trim_middle[2]) {
-        stop("trim_middle[1] must be less than trim_middle[2]")
-      }
-      lex <- lex %>%
-        mutate(across(valence:arousal, ~ifelse(.x >= trim_middle[1] & .x <= trim_middle[2], NA, .x))) %>%
-        filter(!is.na(valence) | !is.na(arousal))
-
-      prop <- sum(is.na(lex$valence) | is.na(lex$arousal))/nrow(lex)
-      if(prop > 0.80) {
-        stop("Too many missing lexicon scores from trimming! trim_middle too restrictive.")
-      }
-    }
+      select(-dominance)
   } else if(ncol(lexicon) < 2) {
     stop("Lexicon must contain at least one column containing words and at least one column containing word scores.")
   } else {
-    lex <- lexicon
+    lex <- vad_lexicon
   }
 
   lex_names <- names(lex)[names(lex) != "word"]
@@ -104,26 +92,18 @@ ued <- function(data, text, lexicon = "vad", id = NULL, time = NULL, stop_words 
 
       tokens_with_sentiments <- tokens_with_sentiments %>%
         group_by({{id}}) %>%
-        filter(n() >= 200) # Hard coded for now
+        filter(n() >= min_count)
     } else {
       tokens_with_sentiments <- tokens_with_sentiments %>%
         group_by({{id}}) %>%
-        filter(n() >= 200) %>% # Hard coded for now
+        filter(n() >= min_count) %>%
         arrange({{id}}, {{time}})
     }
-    if(!is.null(trim_middle)) {
-      data_roll <- tokens_with_sentiments %>%
-        mutate(across(matches(lex_names), rollify(~mean(.x, na.rm = TRUE), roll_avg)),
-               time_num = seq.int(n()),
-               time_prop = time_num/max(time_num)) %>%
-        filter(across(matches(lex_names), ~ !is.na(.x)))
-    } else {
-      data_roll <- tokens_with_sentiments %>%
-        mutate(across(matches(lex_names), rollify(mean, roll_avg)),
-               time_num = seq.int(n()),
-               time_prop = time_num/max(time_num)) %>%
-        filter(across(matches(lex_names), ~ !is.na(.x)))
-    }
+    data_roll <- tokens_with_sentiments %>%
+      mutate(across(matches(lex_names), rollify(~mean(.x, na.rm = TRUE), roll_avg)),
+             time_num = seq.int(n()),
+             time_prop = time_num/max(time_num)) %>%
+      filter(across(matches(lex_names), ~ !is.na(.x)))
   } else {
     data_roll <- tokens_with_sentiments
   }
