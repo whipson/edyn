@@ -3,8 +3,7 @@
 
 # edyn
 
-Compute Utterance Emotion Dynamics (UED) from a series of individual’s
-or multiple individuals’ text.
+Emotion dynamics is a framework for measuring how an individual’s emotions change over time. We introduced the concept of **Utterance Emotion Dynamics (UED)**  to extract emotion dynamics from a person's utterances. This package allows the user to supply passages of text and compute *home bases*, *variability*, and *displacement* among other things. See the arXiv paper for more details.
 
 [Hipson, W., & Mohammad, S. (2021). Emotion Dynamics in Movie Dialogues.
 arXiv preprint arXiv:2103.01345.](https://arxiv.org/abs/2103.01345)
